@@ -1,0 +1,15 @@
+# ESP-IDF build output
+build/
+
+# SDK config backups
+sdkconfig.old
+
+# VSCode (optional - remove if you want to share settings)
+.vscode/
+
+# Python cache (used by ESP-IDF tools)
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
