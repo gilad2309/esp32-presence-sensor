@@ -1,21 +1,24 @@
-# ESP32-C3 Receiver
+# Receiver — ESP32-C3 DevKit M1 (RGB)
 
-## What It Does
+Receives encrypted ESP-NOW presence data and maps detection range to an RGB LED color.
 
-Receives **detection**, **range**, and **speed** over ESP-NOW, then changes the RGB LED color accordingly.
+## LED Behavior
 
-## Build and Run
+- **Red** (0°) → person at 0.3m (close)
+- **Blue** (240°) → person at 25m (far)
+- **Off** → no person detected or no message for 6s
 
-From project root:
+LED is on GPIO 8 (WS2812 addressable LED, driven via RMT peripheral).
+
+## Build & Flash
+
+Requires **ESP-IDF v5.5+**. Flash `provision_keys/` first.
 
 ```bash
 idf.py set-target esp32c3
-idf.py build
-idf.py -p <PORT> flash monitor
+idf.py build flash monitor
 ```
 
-Windows example:
+## Dependencies
 
-```bash
-idf.py -p COM5 flash monitor
-```
+- `espressif/led_strip` v2.0+ (managed component, auto-downloaded on build)
