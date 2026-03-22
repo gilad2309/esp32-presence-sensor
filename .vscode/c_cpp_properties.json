@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "name": "Sender",
+      "compilerPath": "C:\\Espressif\\tools\\riscv32-esp-elf\\esp-14.2.0_20251107\\riscv32-esp-elf\\bin\\riscv32-esp-elf-gcc.exe",
+      "compileCommands": "${workspaceFolder}/sender/build/compile_commands.json"
+    },
+    {
+      "name": "Receiver DevKit M1",
+      "compilerPath": "C:\\Espressif\\tools\\riscv32-esp-elf\\esp-14.2.0_20251107\\riscv32-esp-elf\\bin\\riscv32-esp-elf-gcc.exe",
+      "compileCommands": "${workspaceFolder}/receiver/receiver_esp32_c3_devkit_m1/build/compile_commands.json"
+    },
+    {
+      "name": "Receiver Mini",
+      "compilerPath": "C:\\Espressif\\tools\\riscv32-esp-elf\\esp-14.2.0_20251107\\riscv32-esp-elf\\bin\\riscv32-esp-elf-gcc.exe",
+      "compileCommands": "${workspaceFolder}/receiver/reciver_esp32_c3_mini/build/compile_commands.json"
+    }
+  ],
+  "version": 4
+}

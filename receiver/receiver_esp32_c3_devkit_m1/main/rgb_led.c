@@ -9,7 +9,7 @@
 
 static led_strip_handle_t led_strip;
 
-// --- HSV-to-RGB conversion ---------------------------------------------------
+/* ---------- HSV-to-RGB conversion ---------- */
 // hue: 0-360, sat/val: 0-255.  Output: r,g,b each 0-255.
 static void hsv_to_rgb(uint16_t hue, uint8_t sat, uint8_t val,
                        uint8_t *r, uint8_t *g, uint8_t *b)
@@ -31,7 +31,7 @@ static void hsv_to_rgb(uint16_t hue, uint8_t sat, uint8_t val,
     }
 }
 
-// --- Range-to-color mapping --------------------------------------------------
+/* ---------- Range-to-color mapping ---------- */
 // Maps range to HSV hue: close = red (0), far = blue (240).
 static void range_to_rgb(float range_m, uint8_t *r, uint8_t *g, uint8_t *b)
 {
@@ -44,7 +44,7 @@ static void range_to_rgb(float range_m, uint8_t *r, uint8_t *g, uint8_t *b)
     hsv_to_rgb(hue, 255, LED_BRIGHTNESS, r, g, b);
 }
 
-// --- Public API --------------------------------------------------------------
+/* ---------- Public API ---------- */
 
 void rgb_led_init(void)
 {

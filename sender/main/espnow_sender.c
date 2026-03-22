@@ -11,12 +11,12 @@
 #include <string.h>
 #include <stdio.h>
 
-// ── Receiver MAC addresses ───────────────────────────────────────────────────
+/* ---------- Receiver MAC addresses ---------- */
 static const uint8_t receiver_mac[6]            = {0x10, 0x00, 0x3b, 0xcf, 0xc9, 0xe0};
 static const uint8_t receiver_devkit_m1[6]      = {0xac, 0xeb, 0xe6, 0x8a, 0xfa, 0x04};
 
 
-// ── Encryption keys — read from NVS at runtime ──────────────────────────────
+/* ---------- Encryption keys ---------- */
 // Provision keys first using the provision_keys project.
 static uint8_t PMK[16];
 static uint8_t LMK[16];

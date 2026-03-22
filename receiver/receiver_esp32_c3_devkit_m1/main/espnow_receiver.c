@@ -9,7 +9,7 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 
-// --- Pairing -----------------------------------------------------------------
+/* ---------- Pairing ---------- */
 static const uint8_t sender_mac[6] = {0x10, 0x00, 0x3b, 0xd1, 0xe0, 0xf4};
 static uint8_t PMK[16];
 static uint8_t LMK[16];
@@ -46,7 +46,7 @@ static bool load_keys_from_nvs(void)
 
 static QueueHandle_t s_rx_queue;
 
-// --- ESP-NOW receive callback ------------------------------------------------
+/* ---------- ESP-NOW receive callback ---------- */
 
 static void on_receive(const esp_now_recv_info_t *info,
                        const uint8_t *data, int len)
@@ -67,7 +67,7 @@ static void on_receive(const esp_now_recv_info_t *info,
     xQueueOverwrite(s_rx_queue, &msg);
 }
 
-// --- Initialization ----------------------------------------------------------
+/* ---------- Initialization ---------- */
 
 static void init_wifi(void)
 {

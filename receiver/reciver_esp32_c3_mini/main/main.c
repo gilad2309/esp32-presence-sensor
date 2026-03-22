@@ -10,17 +10,17 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 
-// === LED configuration =======================================================
+/* ---------- LED configuration ---------- */
 #define LED_GPIO    8   // onboard LED on ESP32-C3 Super Mini
 #define LED_ON      0   // active LOW
 #define LED_OFF     1
 
-// === Timing ==================================================================
+/* ---------- Timing ---------- */
 // If no heartbeat arrives within this time, assume person left.
 // Should be > sender's HEARTBEAT_INTERVAL_MS (3000ms).
 #define PRESENCE_TIMEOUT_MS 6000
 
-// === Pairing =================================================================
+/* ---------- Pairing ---------- */
 static const uint8_t sender_mac[6] = {0x10, 0x00, 0x3b, 0xd1, 0xe0, 0xf4};
 static uint8_t PMK[16];
 static uint8_t LMK[16];
@@ -55,14 +55,14 @@ static bool load_keys_from_nvs(void)
     return true;
 }
 
-// === Shared message type (must match radar_data.h) ===========================
+/* ---------- Shared message type (must match radar_data.h) ---------- */
 typedef struct {
     bool  present;
     float range;
     float speed;
 } __attribute__((packed)) radar_msg_t;
 
-// === LED task ================================================================
+/* ---------- LED task ---------- */
 
 static TaskHandle_t led_task_handle = NULL;
 
@@ -83,7 +83,7 @@ static void led_task(void *arg)
     }
 }
 
-// === ESP-NOW receive callback ================================================
+/* ---------- ESP-NOW receive callback ---------- */
 
 static void on_receive(const esp_now_recv_info_t *info,
                        const uint8_t *data, int len)
@@ -104,7 +104,7 @@ static void on_receive(const esp_now_recv_info_t *info,
     }
 }
 
-// === Initialization ==========================================================
+/* ---------- Initialization ---------- */
 
 static void init_led(void)
 {
@@ -156,7 +156,7 @@ static void init_espnow(void)
     esp_now_add_peer(&peer);
 }
 
-// === Entry point =============================================================
+/* ---------- Entry point ---------- */
 
 void app_main(void)
 {
