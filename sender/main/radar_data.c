@@ -1,8 +1,10 @@
 #include "radar_data.h"
+#include "deep_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "driver/uart.h"
+#include "esp_sleep.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,7 +26,7 @@
 
 // === Send policy =============================================================
 #define HEARTBEAT_INTERVAL_MS 3000 // re-send while person is present
-#define ABSENT_FRAMES_TO_CLEAR 5   // consecutive "not present" frames before declaring absent
+#define ABSENT_TIMEOUT_MS 5000 // milliseconds of continuous "not present" before declaring absent
 
 // === Frame parsing ===========================================================
 
@@ -125,22 +127,27 @@ typedef struct
 {
     QueueHandle_t tx_queue;
     bool last_present;
-    int absent_count;
+    TickType_t first_absent_tick;
+    bool absent_timing;
     TickType_t last_send_tick;
 } send_state_t;
 
 static void process_frame(send_state_t *state, radar_msg_t *msg)
 {
-    // Debounce: suppress brief "not present" flickers
+    // Debounce: require ABSENT_TIMEOUT_MS of continuous "not present" before declaring absent
     if (msg->present)
     {
-        state->absent_count = 0;
+        state->absent_timing = false;
     }
     else
     {
-        state->absent_count++;
-        if (state->absent_count < ABSENT_FRAMES_TO_CLEAR)
-            msg->present = true;
+        if (!state->absent_timing)
+        {
+            state->absent_timing = true;
+            state->first_absent_tick = xTaskGetTickCount();
+        }
+        if ((xTaskGetTickCount() - state->first_absent_tick) < pdMS_TO_TICKS(ABSENT_TIMEOUT_MS))
+            msg->present = true; // suppress — not enough time has passed
     }
 
     // Only send on state change or periodic heartbeat while present
@@ -170,7 +177,8 @@ void radar_reader_task(void *param)
     send_state_t state = {
         .tx_queue = (QueueHandle_t)param,
         .last_present = false,
-        .absent_count = 0,
+        .absent_timing = false,
+        .first_absent_tick = 0,
         .last_send_tick = 0,
     };
 
@@ -190,7 +198,15 @@ void radar_reader_task(void *param)
                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
     printf("C4001 radar reader started (9600 baud)\n");
-    configure_sensor();
+
+    /* Only configure sensor on first power-on.
+       On wake from deep sleep, C4001 retains config in flash. */
+    if (get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+        printf("[RADAR] First boot — configuring sensor\n");
+        configure_sensor();
+    } else {
+        printf("[RADAR] Wake from sleep — skipping sensor config (retained in flash)\n");
+    }
 
     // Main loop: assemble lines from UART bytes, parse, and forward
     uint8_t buf[BUF_SIZE];

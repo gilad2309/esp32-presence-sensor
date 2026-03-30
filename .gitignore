@@ -16,6 +16,9 @@
 # Log files
 *.log
 
+# Project artifacts
+artifacts/
+
 # Build artifacts and directories
 **/build/
 build/
