@@ -134,6 +134,7 @@ static void init_wifi(void)
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_start();
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
     esp_wifi_set_max_tx_power(84);  // 21 dBm (max)
 
     uint8_t mac[6];

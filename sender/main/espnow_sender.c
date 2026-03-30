@@ -78,6 +78,7 @@ static void espnow_sender_init(void)
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_start();
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
     esp_wifi_set_max_tx_power(84); // 21 dBm (max)
 
     uint8_t mac[6];
@@ -100,7 +101,17 @@ static void espnow_sender_init(void)
     memcpy(peer.peer_addr, receiver_devkit_m1, 6);
     esp_now_add_peer(&peer);
 
-    printf("[ESP-NOW] Sender initialized — 2 receivers (unicast + encrypted)\n");
+    /* Configure Long Range (LR) PHY rate for both peers */
+    esp_now_rate_config_t lr_rate = {
+        .phymode = WIFI_PHY_MODE_LR,
+        .rate    = WIFI_PHY_RATE_LORA_250K,
+        .ersu    = false,
+        .dcm     = false,
+    };
+    esp_now_set_peer_rate_config(receiver_mac, &lr_rate);
+    esp_now_set_peer_rate_config(receiver_devkit_m1, &lr_rate);
+
+    printf("[ESP-NOW] Sender initialized — 2 receivers (unicast + encrypted + LR)\n");
 }
 
 void espnow_tx_task(void *param)
