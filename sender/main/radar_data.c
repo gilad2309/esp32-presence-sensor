@@ -20,13 +20,13 @@
 #define UART_EVENT_QUEUE_DEPTH 16
 
 // === Sensor configuration ====================================================
-#define DETECT_THRESHOLD 90 // speed mode threshold (higher = less sensitive)
+#define DETECT_THRESHOLD 30 // speed mode threshold (higher = less sensitive)
 #define MIN_RANGE_CM 30
 #define MAX_RANGE_CM 2500 // SEN0609 hardware max: 25 m
 
 // === Send policy =============================================================
 #define HEARTBEAT_INTERVAL_MS 3000 // re-send while person is present
-#define ABSENT_TIMEOUT_MS 5000 // milliseconds of continuous "not present" before declaring absent
+#define ABSENT_TIMEOUT_MS 5000     // milliseconds of continuous "not present" before declaring absent
 
 // === Frame parsing ===========================================================
 
@@ -201,10 +201,13 @@ void radar_reader_task(void *param)
 
     /* Only configure sensor on first power-on.
        On wake from deep sleep, C4001 retains config in flash. */
-    if (get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    if (get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
+    {
         printf("[RADAR] First boot — configuring sensor\n");
         configure_sensor();
-    } else {
+    }
+    else
+    {
         printf("[RADAR] Wake from sleep — skipping sensor config (retained in flash)\n");
     }
 
