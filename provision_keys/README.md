@@ -7,19 +7,28 @@ Writes ESP-NOW encryption keys (PMK and LMK) to the NVS flash partition. These k
 - ESP-IDF v5.5+ installed and configured
 - Target set to your ESP32 variant (e.g., `esp32c3`)
 
+**This project is shared across every board in the system (sender, all receivers), which mix ESP32-C3 and ESP32-S3 chips.** Unlike the sender/receiver projects (each pinned to one chip), this one's `sdkconfig` follows whichever target you last built for. **Before building/flashing, always check (and switch if needed) the target for the board you're about to provision:**
+
+```
+Ctrl+Shift+P → ESP-IDF: Set Espressif Device Target → (esp32c3 or esp32s3)
+```
+
+Flashing with the wrong target selected will fail or produce a binary for the wrong chip.
+
 ## Usage
 
-### Step 1: Generate keys on the first device (sender)
+### Step 1: Generate keys on one device (any board, your choice)
+
+Pick any single board in the system to go first (sender or receiver, doesn't matter). It'll already be fully provisioned once this step is done — no need to flash it again in Step 2.
 
 1. Open `main/provision_keys.c` and set:
    ```c
    #define GENERATE_RANDOM_KEYS 1
    ```
 
-2. Build, flash, and open the serial monitor:
+2. Set the target to match the board you picked (see Prerequisites), then build, flash, and open the serial monitor:
    ```bash
    cd provision_keys
-   idf.py set-target esp32c3
    idf.py build flash monitor
    ```
 
@@ -31,7 +40,7 @@ Writes ESP-NOW encryption keys (PMK and LMK) to the NVS flash partition. These k
 
 4. Copy these key values.
 
-### Step 2: Flash the same keys to all other devices (receivers)
+### Step 2: Flash the same keys to every remaining device
 
 1. Open `main/provision_keys.c` and set:
    ```c
@@ -48,7 +57,7 @@ Writes ESP-NOW encryption keys (PMK and LMK) to the NVS flash partition. These k
    };
    ```
 
-3. Build and flash to each receiver:
+3. Build and flash to each remaining board (switching the target as needed between chip families, see Prerequisites):
    ```bash
    idf.py build flash monitor
    ```

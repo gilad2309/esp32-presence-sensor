@@ -61,6 +61,6 @@ void app_main(void)
 
     /* --- Block until absence confirmed and sent --- */
     xSemaphoreTake(sleep_sem, portMAX_DELAY);
-    printf("[BOOT] Absence sent — entering deep sleep\n");
+    printf("[BOOT] Absence sent - entering deep sleep\n");
     enter_deep_sleep();
 }

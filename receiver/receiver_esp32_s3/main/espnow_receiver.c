@@ -1,24 +1,13 @@
+#include "espnow_receiver.h"
+#include "radar_msg.h"
+
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
 #include "esp_now.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
-
-/* ---------- LED configuration ---------- */
-#define LED_GPIO    8   // onboard LED on ESP32-C3 Super Mini
-#define LED_ON      0   // active LOW
-#define LED_OFF     1
-
-/* ---------- Timing ---------- */
-// If no heartbeat arrives within this time, assume person left.
-// Should be > sender's HEARTBEAT_INTERVAL_MS (3000ms).
-#define PRESENCE_TIMEOUT_MS 6000
 
 /* ---------- Pairing ---------- */
 static const uint8_t sender_macs[][6] = {
@@ -59,33 +48,7 @@ static bool load_keys_from_nvs(void)
     return true;
 }
 
-/* ---------- Shared message type (must match radar_data.h) ---------- */
-typedef struct {
-    bool  present;
-    float range;
-    float speed;
-} __attribute__((packed)) radar_msg_t;
-
-/* ---------- LED task ---------- */
-
-static TaskHandle_t led_task_handle = NULL;
-
-#define NOTIFY_PRESENT 1
-#define NOTIFY_ABSENT  2
-
-static void led_task(void *arg)
-{
-    for (;;) {
-        uint32_t value = 0;
-        xTaskNotifyWait(0, ULONG_MAX, &value,
-                        pdMS_TO_TICKS(PRESENCE_TIMEOUT_MS));
-
-        if (value == NOTIFY_PRESENT)
-            gpio_set_level(LED_GPIO, LED_ON);
-        else
-            gpio_set_level(LED_GPIO, LED_OFF);
-    }
-}
+static QueueHandle_t s_rx_queue;
 
 /* ---------- ESP-NOW receive callback ---------- */
 
@@ -101,25 +64,18 @@ static void on_receive(const esp_now_recv_info_t *info,
     const uint8_t *src = info->src_addr;
 
     if (msg.present) {
-        printf("[RX] Person DETECTED from %02x:%02x:%02x:%02x:%02x:%02x — range: %.2f m | speed: %.2f m/s | RSSI: %d dBm\n",
+        printf("[RX] Person DETECTED from %02x:%02x:%02x:%02x:%02x:%02x -- range: %.2f m | speed: %.2f m/s | RSSI: %d dBm\n",
                src[0], src[1], src[2], src[3], src[4], src[5],
                msg.range, msg.speed, info->rx_ctrl->rssi);
-        xTaskNotify(led_task_handle, NOTIFY_PRESENT, eSetValueWithOverwrite);
     } else {
         printf("[RX] Person LEFT from %02x:%02x:%02x:%02x:%02x:%02x | RSSI: %d dBm\n",
                src[0], src[1], src[2], src[3], src[4], src[5], info->rx_ctrl->rssi);
-        xTaskNotify(led_task_handle, NOTIFY_ABSENT, eSetValueWithOverwrite);
     }
+
+    xQueueOverwrite(s_rx_queue, &msg);
 }
 
 /* ---------- Initialization ---------- */
-
-static void init_led(void)
-{
-    gpio_reset_pin(LED_GPIO);
-    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(LED_GPIO, LED_OFF);
-}
 
 static void init_wifi(void)
 {
@@ -167,15 +123,9 @@ static void init_espnow(void)
     }
 }
 
-/* ---------- Entry point ---------- */
-
-void app_main(void)
+void espnow_receiver_init(QueueHandle_t rx_queue)
 {
-    init_led();
+    s_rx_queue = rx_queue;
     init_wifi();
     init_espnow();
-
-    xTaskCreate(led_task, "led_task", 2048, NULL, 5, &led_task_handle);
-
-    printf("[ESP-NOW] Receiver ready - waiting for detections...\n");
 }
