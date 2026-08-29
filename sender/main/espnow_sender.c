@@ -1,5 +1,6 @@
 #include "espnow_sender.h"
 #include "radar_data.h"
+#include "espnow_pairing.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -12,30 +13,29 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ---------- Receiver MAC addresses ---------- */
-// Only one receiver is powered on at a time, so the sender targets a single
-// MAC selected at compile time. To switch which physical receiver this
-// sender talks to, change ACTIVE_RECEIVER below and reflash.
-#define RECEIVER_SIMPLE 0    // C3 Super Mini
-#define RECEIVER_DEVKIT_M1 1 // C3 DevKit M1 (RGB)
-#define RECEIVER_S3 2        // ESP32-S3 (RGB)
-
-#define ACTIVE_RECEIVER RECEIVER_S3
-
-static const uint8_t receiver_macs[][6] = {
-    [RECEIVER_SIMPLE] = {0x10, 0x00, 0x3b, 0xcf, 0xc9, 0xe0},
-    [RECEIVER_DEVKIT_M1] = {0xac, 0xeb, 0xe6, 0x8a, 0xfa, 0x04},
-    [RECEIVER_S3] = {0x1c, 0xdb, 0xd4, 0x47, 0x05, 0x08},
-};
-
-#define receiver_mac (receiver_macs[ACTIVE_RECEIVER])
-
-/* ---------- Encryption keys ---------- */
+/* ---------- Encryption keys + pairing token ---------- */
 static uint8_t PMK[16];
 static uint8_t LMK[16];
+static uint8_t NETID[ESPNOW_PAIRING_NETID_LEN];
+
+/* ---------- Discovered receiver ---------- */
+static uint8_t g_receiver_mac[6];
+
+// How long each discovery burst waits for a reply before trying again.
+// wait_for_receiver() loops this indefinitely -- the sender stays awake
+// (not sleeping between attempts) until a receiver actually answers, no
+// upper bound. Trade-off: if a receiver is genuinely unreachable for a
+// long stretch, this burns battery instead of backing off to the safety
+// timer, unlike a single bounded attempt would.
+#define DISCOVERY_BURST_MS 10000
 
 /* ---------- Send-confirm semaphore ---------- */
 static SemaphoreHandle_t s_send_done;
+static volatile bool s_last_send_ok = false;
+
+/* ---------- Self-healing re-pairing ---------- */
+#define FORGET_THRESHOLD 8
+static int s_consecutive_failures = 0;
 
 static bool load_keys_from_nvs(void)
 {
@@ -65,6 +65,15 @@ static bool load_keys_from_nvs(void)
         return false;
     }
 
+    len = ESPNOW_PAIRING_NETID_LEN;
+    ret = nvs_get_blob(handle, "netid", NETID, &len);
+    if (ret != ESP_OK)
+    {
+        printf("[ESP-NOW] NETID not found in NVS: %s (re-run provision_keys)\n", esp_err_to_name(ret));
+        nvs_close(handle);
+        return false;
+    }
+
     nvs_close(handle);
     printf("[ESP-NOW] Keys loaded from NVS\n");
     return true;
@@ -72,11 +81,32 @@ static bool load_keys_from_nvs(void)
 
 static void on_sent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status)
 {
-    if (status != ESP_NOW_SEND_SUCCESS)
+    s_last_send_ok = (status == ESP_NOW_SEND_SUCCESS);
+    if (!s_last_send_ok)
     {
         printf("[ESP-NOW] Send failed\n");
     }
     xSemaphoreGive(s_send_done);
+}
+
+static bool send_once(const uint8_t mac[6], const void *data, size_t len)
+{
+    esp_now_send(mac, (const uint8_t *)data, len);
+    return xSemaphoreTake(s_send_done, pdMS_TO_TICKS(1000)) == pdTRUE && s_last_send_ok;
+}
+
+// Blocks until a receiver is found, retrying in DISCOVERY_BURST_MS bursts
+// indefinitely -- no upper bound, no sleep in between (see the trade-off
+// note on DISCOVERY_BURST_MS above). Fills g_receiver_mac on return.
+static void wait_for_receiver(void)
+{
+    int attempt = 0;
+    while (!espnow_pairing_get_receiver(DISCOVERY_BURST_MS, g_receiver_mac))
+    {
+        attempt++;
+        printf("[ESP-NOW] No receiver found (attempt %d, %ds each) -- retrying\n",
+               attempt, DISCOVERY_BURST_MS / 1000);
+    }
 }
 
 static void espnow_sender_init(void)
@@ -109,25 +139,9 @@ static void espnow_sender_init(void)
     esp_now_set_pmk(PMK);
     esp_now_register_send_cb(on_sent);
 
-    esp_now_peer_info_t peer = {0};
-    memcpy(peer.peer_addr, receiver_mac, 6);
-    memcpy(peer.lmk, LMK, 16);
-    peer.channel = 0;
-    peer.encrypt = true;
-    esp_now_add_peer(&peer);
+    espnow_pairing_init(NETID, LMK, NULL);   // sender has no app-level recv
 
-    /* Configure Long Range (LR) PHY rate for the active peer */
-    esp_now_rate_config_t lr_rate = {
-        .phymode = WIFI_PHY_MODE_LR,
-        .rate = WIFI_PHY_RATE_LORA_250K,
-        .ersu = false,
-        .dcm = false,
-    };
-    esp_now_set_peer_rate_config(receiver_mac, &lr_rate);
-
-    printf("[ESP-NOW] Sender initialized — target: %02x:%02x:%02x:%02x:%02x:%02x (unicast + encrypted + LR)\n",
-           receiver_mac[0], receiver_mac[1], receiver_mac[2],
-           receiver_mac[3], receiver_mac[4], receiver_mac[5]);
+    wait_for_receiver();   // blocks until paired, see DISCOVERY_BURST_MS note
 }
 
 void espnow_tx_task(void *param)
@@ -138,23 +152,33 @@ void espnow_tx_task(void *param)
 
     s_send_done = xSemaphoreCreateBinary();
 
-    espnow_sender_init();
+    espnow_sender_init();   // blocks inside until paired, see wait_for_receiver()
 
     radar_msg_t msg;
     while (1)
     {
         xQueueReceive(tx_queue, &msg, portMAX_DELAY);
 
-        esp_now_send(receiver_mac, (uint8_t *)&msg, sizeof(msg));
+        bool ok = send_once(g_receiver_mac, &msg, sizeof(msg));
 
-        /* Wait for on_sent callback (1s timeout to prevent hang) */
-        if (xSemaphoreTake(s_send_done, pdMS_TO_TICKS(1000)) != pdTRUE)
+        printf("[ESP-NOW] %s -> present:%d range:%.2fm speed:%.2fm/s\n",
+               ok ? "Sent" : "Send FAILED", msg.present, msg.range, msg.speed);
+
+        if (!ok)
         {
-            printf("[ESP-NOW] Send confirm timeout\n");
+            if (++s_consecutive_failures >= FORGET_THRESHOLD)
+            {
+                printf("[ESP-NOW] %d consecutive failures -- forgetting receiver and re-discovering\n",
+                       s_consecutive_failures);
+                espnow_pairing_forget_receiver();
+                wait_for_receiver();   // blocks until re-paired, same as at boot
+                s_consecutive_failures = 0;
+            }
         }
-
-        printf("[ESP-NOW] Sent → present:%d range:%.2fm speed:%.2fm/s\n",
-               msg.present, msg.range, msg.speed);
+        else
+        {
+            s_consecutive_failures = 0;
+        }
 
         /* If we just confirmed absence was sent, signal app_main to sleep */
         if (!msg.present)

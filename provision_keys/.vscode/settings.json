@@ -1,11 +1,18 @@
 {
-    "idf.currentSetup": "C:\\esp\\v5.5.3\\esp-idf",
-    "idf.openOcdConfigs": [
-        "board/esp32c3-builtin.cfg"
-    ],
-    "idf.customExtraVars": {
-        "IDF_TARGET": "esp32c3"
-    },
-    "idf.portWin": "COM18",
-    "idf.flashType": "UART"
+  "idf.currentSetup": "C:\\esp\\v5.5.3\\esp-idf",
+  "idf.openOcdConfigs": [
+    "board/esp32c3-builtin.cfg"
+  ],
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32c3",
+    "OPENOCD_USB_ADAPTER_LOCATION": "1-1"
+  },
+  "idf.portWin": "COM15",
+  "idf.flashType": "UART",
+  "clangd.path": "C:\\Espressif\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\Users\\gw230\\OneDrive\\Desktop\\esp32\\sensor_project\\provision_keys\\build"
+  ]
 }

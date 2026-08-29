@@ -38,18 +38,22 @@ void app_main(void)
     // Prepare keys
     uint8_t pmk[16];
     uint8_t lmk[16];
+    uint8_t netid[8];   // pre-shared pairing gate token -- NOT the PMK
 
 #if GENERATE_RANDOM_KEYS
     printf("Generating random keys...\n");
     esp_fill_random(pmk, 16);
     esp_fill_random(lmk, 16);
+    esp_fill_random(netid, 8);
 #else
     // Replace with the keys printed by the first device.
-    static const uint8_t FIXED_PMK[16] = {0xE5, 0xCB, 0xB3, 0xB7, 0x87, 0x20, 0x00, 0xF5, 0xA7, 0x58, 0x6C, 0xC7, 0x44, 0xC5, 0x5B, 0x91};
-    static const uint8_t FIXED_LMK[16] = {0x3A, 0xCB, 0x5E, 0x99, 0xCF, 0xDD, 0x5B, 0x40, 0xF7, 0x30, 0x12, 0xC2, 0x64, 0x13, 0x7A, 0x27};
+    static const uint8_t FIXED_PMK[16] = { 0x91, 0x39, 0xDB, 0xC9, 0x11, 0xB7, 0x47, 0xCC, 0x5F, 0xB1, 0x8A, 0xA5, 0xE0, 0x99, 0xAB, 0x3A};
+    static const uint8_t FIXED_LMK[16] = {0x05, 0x78, 0xE7, 0x5B, 0xCE, 0xDA, 0x21, 0x67, 0xC1, 0x36, 0xA9, 0x2C, 0x21, 0x62, 0xE2, 0xB0};
+    static const uint8_t FIXED_NETID[8] = { 0x68, 0x3C, 0xA1, 0x75, 0xD3, 0x9F, 0x42, 0x83};  // paste generated value
     printf("Using fixed keys...\n");
     memcpy(pmk, FIXED_PMK, 16);
     memcpy(lmk, FIXED_LMK, 16);
+    memcpy(netid, FIXED_NETID, 8);
 #endif
 
     // Write to NVS
@@ -63,6 +67,7 @@ void app_main(void)
 
     nvs_set_blob(handle, "pmk", pmk, 16);
     nvs_set_blob(handle, "lmk", lmk, 16);
+    nvs_set_blob(handle, "netid", netid, 8);
     nvs_commit(handle);
     nvs_close(handle);
 
@@ -70,22 +75,27 @@ void app_main(void)
     printf("\n=== Keys written to NVS ===\n\n");
     print_key("PMK", pmk, 16);
     print_key("LMK", lmk, 16);
-    printf("\n*** IMPORTANT: Copy these keys and flash them to ALL receivers ***\n");
-    printf("*** Set GENERATE_RANDOM_KEYS to 0 and paste the keys into FIXED_PMK/FIXED_LMK ***\n");
-    printf("*** Then flash this provisioning app to each receiver ***\n\n");
+    print_key("NETID", netid, 8);
+    printf("\n*** IMPORTANT: Copy these values and flash them to ALL other devices ***\n");
+    printf("*** Set GENERATE_RANDOM_KEYS to 0 and paste them into FIXED_PMK/FIXED_LMK/FIXED_NETID ***\n");
+    printf("*** Then flash this provisioning app to each remaining device ***\n\n");
 
     // Verify by reading back
     uint8_t verify_pmk[16];
     uint8_t verify_lmk[16];
+    uint8_t verify_netid[8];
     size_t len = 16;
 
     nvs_open("espnow", NVS_READONLY, &handle);
     nvs_get_blob(handle, "pmk", verify_pmk, &len);
     len = 16;
     nvs_get_blob(handle, "lmk", verify_lmk, &len);
+    len = 8;
+    nvs_get_blob(handle, "netid", verify_netid, &len);
     nvs_close(handle);
 
-    if (memcmp(pmk, verify_pmk, 16) == 0 && memcmp(lmk, verify_lmk, 16) == 0)
+    if (memcmp(pmk, verify_pmk, 16) == 0 && memcmp(lmk, verify_lmk, 16) == 0 &&
+        memcmp(netid, verify_netid, 8) == 0)
     {
         printf("Verification: OK — keys read back correctly\n");
     }

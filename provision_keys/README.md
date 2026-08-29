@@ -1,6 +1,9 @@
 # ESP-NOW Key Provisioning
 
-Writes ESP-NOW encryption keys (PMK and LMK) to the NVS flash partition. These keys persist across application reflashes and are read at runtime by the sender and receiver firmware.
+Writes the ESP-NOW encryption keys (PMK and LMK) and the pairing network ID (NETID) to the NVS flash partition. These persist across application reflashes and are read at runtime by the sender and receiver firmware.
+
+- **PMK/LMK**: encrypt the actual presence-data traffic (AES-128).
+- **NETID**: a separate pre-shared token used only to gate auto-pairing (see `espnow_pairing` component) between senders and the receiver. It is not a secret key and is broadcast in the clear during discovery, so it must stay independent from PMK/LMK.
 
 ## Prerequisites
 
@@ -19,7 +22,7 @@ Flashing with the wrong target selected will fail or produce a binary for the wr
 
 ### Step 1: Generate keys on one device (any board, your choice)
 
-Pick any single board in the system to go first (sender or receiver, doesn't matter). It'll already be fully provisioned once this step is done — no need to flash it again in Step 2.
+Pick any single board in the system to go first (sender or receiver, doesn't matter). It'll already be fully provisioned once this step is done, no need to flash it again in Step 2.
 
 1. Open `main/provision_keys.c` and set:
    ```c
@@ -32,13 +35,14 @@ Pick any single board in the system to go first (sender or receiver, doesn't mat
    idf.py build flash monitor
    ```
 
-3. The console will print the generated keys:
+3. The console will print the generated values:
    ```
    PMK: { 0xA3, 0x1F, 0x9B, 0x44, ... }
    LMK: { 0x7C, 0x02, 0xE8, 0xBB, ... }
+   NETID: { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 }
    ```
 
-4. Copy these key values.
+4. Copy these values.
 
 ### Step 2: Flash the same keys to every remaining device
 
@@ -47,13 +51,16 @@ Pick any single board in the system to go first (sender or receiver, doesn't mat
    #define GENERATE_RANDOM_KEYS 0
    ```
 
-2. Paste the copied keys into `FIXED_PMK` and `FIXED_LMK`:
+2. Paste the copied values into `FIXED_PMK`, `FIXED_LMK`, and `FIXED_NETID`:
    ```c
    static const uint8_t FIXED_PMK[16] = {
        0xA3, 0x1F, 0x9B, 0x44, ...  // paste your PMK here
    };
    static const uint8_t FIXED_LMK[16] = {
        0x7C, 0x02, 0xE8, 0xBB, ...  // paste your LMK here
+   };
+   static const uint8_t FIXED_NETID[8] = {
+       0x11, 0x22, 0x33, 0x44, ...  // paste your NETID here
    };
    ```
 
@@ -66,15 +73,15 @@ Pick any single board in the system to go first (sender or receiver, doesn't mat
 
 ### Step 3: Flash the real application
 
-Flash the sender (`person_detection`) and receiver firmware on top. The NVS partition is not overwritten by `idf.py flash`, so the keys survive.
+Flash the sender and receiver firmware on top. The NVS partition is not overwritten by `idf.py flash`, so the keys survive.
 
 ## Erasing keys
 
 To remove the keys from a device:
 
-```bash
-ctrl + shift + P 
-ESP-IDF:Erase Flash Memory From Device
+```
+Ctrl+Shift+P
+ESP-IDF: Erase Flash Memory From Device
 ```
 
 This erases the entire flash including NVS. You will need to re-provision keys afterward.

@@ -8,15 +8,12 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
+#include "espnow_pairing.h"
 
-/* ---------- Pairing ---------- */
-static const uint8_t sender_macs[][6] = {
-    {0x10, 0x00, 0x3b, 0xd1, 0xe0, 0xf4},
-    {0x10, 0x00, 0x3b, 0xd1, 0xd4, 0x44},
-};
-#define NUM_SENDERS (sizeof(sender_macs) / sizeof(sender_macs[0]))
+/* ---------- Encryption keys + pairing token ---------- */
 static uint8_t PMK[16];
 static uint8_t LMK[16];
+static uint8_t NETID[ESPNOW_PAIRING_NETID_LEN];
 
 static bool load_keys_from_nvs(void)
 {
@@ -39,6 +36,14 @@ static bool load_keys_from_nvs(void)
     ret = nvs_get_blob(handle, "lmk", LMK, &len);
     if (ret != ESP_OK) {
         printf("[ESP-NOW] LMK not found in NVS: %s\n", esp_err_to_name(ret));
+        nvs_close(handle);
+        return false;
+    }
+
+    len = ESPNOW_PAIRING_NETID_LEN;
+    ret = nvs_get_blob(handle, "netid", NETID, &len);
+    if (ret != ESP_OK) {
+        printf("[ESP-NOW] NETID not found in NVS: %s (re-run provision_keys)\n", esp_err_to_name(ret));
         nvs_close(handle);
         return false;
     }
@@ -77,7 +82,7 @@ static void on_receive(const esp_now_recv_info_t *info,
 
 /* ---------- Initialization ---------- */
 
-static void init_wifi(void)
+static bool init_wifi(void)
 {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -87,7 +92,7 @@ static void init_wifi(void)
 
     if (!load_keys_from_nvs()) {
         printf("[ESP-NOW] FATAL: Cannot start without keys\n");
-        return;
+        return false;
     }
 
     esp_netif_init();
@@ -105,27 +110,21 @@ static void init_wifi(void)
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     printf("[ESP-NOW] Receiver MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return true;
 }
 
 static void init_espnow(void)
 {
     esp_now_init();
     esp_now_set_pmk(PMK);
-    esp_now_register_recv_cb(on_receive);
-
-    for (size_t i = 0; i < NUM_SENDERS; i++) {
-        esp_now_peer_info_t peer = {0};
-        memcpy(peer.peer_addr, sender_macs[i], 6);
-        memcpy(peer.lmk, LMK, 16);
-        peer.channel = 0;
-        peer.encrypt = true;
-        esp_now_add_peer(&peer);
-    }
+    espnow_pairing_receiver_init(NETID, LMK, on_receive);
 }
 
 void espnow_receiver_init(QueueHandle_t rx_queue)
 {
     s_rx_queue = rx_queue;
-    init_wifi();
+    if (!init_wifi()) {
+        return;   // FATAL already printed; don't touch ESP-NOW on top of failed WiFi init
+    }
     init_espnow();
 }
